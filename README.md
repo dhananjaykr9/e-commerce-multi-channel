@@ -10,39 +10,7 @@ This project is designed as a realistic end-to-end Data Engineering solution for
 
 ### Architecture Flow
 
-```text
-[ Data Sources ]
-  ├── MySQL Database (Internal E-Commerce Orders & Customers)
-  └── Marketplace API (AWS Lambda Serverless Sales & Refunds JSON Feed)
-         │
-         ▼
-[ Data Ingestion Layer ] (Orchestrated by Airflow)
-  ├── Python Ingestion: MySQL Extract  ──► Uploads to S3 (raw-landing/mysql/)
-  └── Python Ingestion: API Fetch      ──► Uploads to S3 (raw-landing/marketplace/)
-         │
-         ▼
-[ Data Lake Storage Layer ] (Amazon S3 - single bucket: e-commerce-multi-channel)
-  ├── raw-landing/   (Unmodified Raw Source Records)
-  ├── bad-records/   (Quarantined Invalid / Malformed Records)
-  └── curated/       (Cleansed, Deduplicated Parquet Files)
-         │
-         ▼
-[ Processing Layer ] (AWS Glue Job)
-  └── PySpark ETL: cleans, validates, standardizes, joins sales & refunds,
-      routes malformed records to bad-records, and writes Parquet to curated/
-         │
-         ▼
-[ Data Warehouse Layer ] (Snowflake Star Schema)
-  ├── dim_products  (Product dimension, loaded via COPY INTO & MERGE)
-  ├── dim_customers (Customer dimension, unified from MySQL & Marketplace)
-  ├── dim_channels  (Sales channels: Website, Amazon, Flipkart)
-  └── fact_sales    (Sales fact table, mapped and loaded incrementally)
-         │
-         ▼
-[ Business Reporting & Alerting ]
-  ├── Snowflake SQL: Revenue by channel, sales trends, refund rates
-  └── Inventory Alert: low-stock warnings (current_stock <= reorder_threshold)
-```
+`MySQL & Marketplace API` ──► `Airflow Ingestion` ──► `S3 Raw Landing` ──► `AWS Glue (PySpark)` ──► `S3 Curated` ──► `Snowflake DW`
 
 ---
 
