@@ -10,9 +10,7 @@ This project is designed as a realistic end-to-end Data Engineering solution for
 
 ### Architecture Flow
 
-`MySQL & Lambda (Marketplace API)` ──► `Python Ingestion` ──► `S3 Raw Landing` ──► `AWS Glue (PySpark)` ──► `S3 Curated` ──► `Snowflake DW`
-
-*(Orchestrated end-to-end via Apache Airflow)*
+![E-Commerce Multi-Channel Architectural Flow](architectural_flow.png)
 
 ---
 
