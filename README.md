@@ -75,15 +75,12 @@ Components:
 
 *Benefit:* Enables development and testing without maintaining cloud infrastructure continuously.
 
-### F. Serverless API Data Generation Using AWS Lambda
-The Marketplace API source is generated and served using **AWS Lambda**. Since the Marketplace source is an external API and does not require heavy processing, Lambda is used as a lightweight serverless component to generate realistic marketplace sales and refund data in JSON format.
+### F. Serverless API Data Generation (AWS Lambda + Amazon API Gateway)
+The Marketplace API source is exposed using **Amazon API Gateway** and generated/served dynamically using **AWS Lambda**. Since the Marketplace source is an external API and does not require heavy processing, this combination acts as a lightweight serverless component to generate realistic marketplace sales and refund data in JSON format.
 
-*Lambda Responsibilities:*
-- Generate marketplace sales data
-- Generate refund data
-- Serve the data through API endpoints
-- Return JSON responses
-- Handle basic API request processing
+*Lambda & API Gateway Responsibilities:*
+- **Amazon API Gateway**: Exposes public HTTPS endpoints (`/sales` and `/refunds`) and routes incoming HTTP requests to our Lambda function.
+- **AWS Lambda**: Programmatically generates mock sales/refund transaction lists on-demand and returns JSON payloads.
 
 ---
 
@@ -91,7 +88,7 @@ The Marketplace API source is generated and served using **AWS Lambda**. Since t
 
 ### Data Ingestion Layer
 - **MySQL Extraction**: Python-based ingestion jobs connect to the local database using `pymysql`, extract incremental order and customer data, convert extracted records into local staging files, upload them to `s3://e-commerce-multi-channel/raw-landing/mysql/` and clean up staging files.
-- **Marketplace API Extraction**: The ingestion process calls the deployed Lambda API, performs basic response validation, generates raw JSON files, uploads them to `s3://e-commerce-multi-channel/raw-landing/marketplace/` and cleans up staging files.
+- **Marketplace API Extraction**: The ingestion process calls the public HTTPS endpoints exposed by **Amazon API Gateway**, which triggers the underlying **AWS Lambda** function. It performs basic response validation, generates raw JSON files, uploads them to `s3://e-commerce-multi-channel/raw-landing/marketplace/` and cleans up staging files.
 
 ### Data Lake Storage Layer (S3 Bucket: `e-commerce-multi-channel`)
 - **Raw Landing Zone (`raw-landing/`)**: Stores original source data, historical snapshots, audit copies, and unmodified source records.
