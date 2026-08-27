@@ -1,0 +1,36 @@
+# Credentials
+.env
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# IDE and Editor configs
+.vscode/
+.idea/
+.gemini/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# OS Files
+Thumbs.db
+db.db
+Desktop.ini
+
+# Local Logs / Data
+logs/
+*.log
+sqlite.db
+data/
