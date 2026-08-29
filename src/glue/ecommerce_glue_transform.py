@@ -58,7 +58,8 @@ invalid_mysql = mysql_raw.filter(
     col("order_id").isNull() | 
     col("customer_id").isNull() | 
     col("product_id").isNull() | 
-    (col("quantity") <= 0)
+    (col("quantity") <= 0) |
+    (col("order_status") == "Cancelled")
 )
 if invalid_mysql.count() > 0:
     invalid_mysql.write.mode("append").json(QUARANTINE_PATH + "mysql_orders/")

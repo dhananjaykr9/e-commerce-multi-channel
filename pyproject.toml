@@ -11,6 +11,7 @@ dependencies = [
     "cryptography>=42.0.0",
     "python-dotenv>=1.0.1",
     "snowflake-connector-python>=3.7.0",
+    "pyspark>=3.5.0",
 ]
 
 [dependency-groups]

@@ -1,5 +1,7 @@
-# Credentials
+# Environment & Credentials
 .env
+*.env.*
+!.env.example
 
 # Virtual Environments
 .venv/
@@ -7,14 +9,37 @@ venv/
 env/
 ENV/
 
-# Python Cache
+# Python & Build Artifacts
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
 .pytest_cache/
+*.egg-info/
+dist/
+build/
 
-# IDE and Editor configs
+# Spark & Hadoop Local Staging / Runtime
+spark-warehouse/
+metastore_db/
+derby.log
+hadoop/
+data_staging/
+data/
+*.parquet
+*.csv
+*.jsonl
+
+# Airflow Local Artifacts
+logs/
+*.log
+sqlite.db
+airflow_webserver.pid
+
+# Docker & Caches
+.pip-cache/
+
+# IDE & OS Specific
 .vscode/
 .idea/
 .gemini/
@@ -23,18 +48,14 @@ __pycache__/
 *.njsproj
 *.sln
 *.swp
-
-# OS Files
 Thumbs.db
-db.db
 Desktop.ini
+.DS_Store
 
-# Local Logs / Data
-logs/
-*.log
-sqlite.db
-data/
-
-# Local guides
+# Temporary Internal Documentation & Scratch
 project_explanation.md
+project_explanation_v2.md
 implementation_plan.md
+old_system_architecture.png
+architectural_flow.png
+

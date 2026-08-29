@@ -1,176 +1,264 @@
 # E-Commerce Multi-Channel Revenue & Inventory Intelligence System
 
-This project is designed as a realistic end-to-end Data Engineering solution for monitoring revenue, inventory, and sales performance across multiple sales channels. The system integrates data from internal and external sources, processes and validates it using **AWS Glue Jobs written in PySpark**, stores raw and curated data in Amazon S3, loads business-ready datasets into Snowflake using a star schema design, and provides business insights through SQL queries against Snowflake.
+An end-to-end Data Engineering pipeline designed to extract, transform, and analyze multi-channel e-commerce revenue and inventory data. The system ingests transactions from internal operational databases (MySQL) and external marketplaces (Amazon & Flipkart via REST API), processes and cleanses datasets using **PySpark** running locally in containerized environments, stores curated analytical datasets in **Amazon S3**, and models them into a Star Schema data warehouse in **Snowflake**, all orchestrated by **Apache Airflow**.
 
 ---
 
-## 1. System Architecture
+## 1. Pipeline Architecture & Data Flow
 
 ![E-Commerce Multi-Channel System Architecture](system_architecture.png)
 
-### Architecture Flow
-
-![E-Commerce Multi-Channel Architectural Flow](architectural_flow.png)
-
----
-
-## 2. Key Improvements Over the Initial Design
-
-### A. Realistic Data Sources
-Instead of simulating multiple e-commerce platforms using static generated JSON files, the architecture uses two practical and industry-relevant source types:
-- **MySQL Database**: Represents the organization's internal e-commerce platform. Stores operational data such as orders and customer information.
-- **Marketplace API**: Simulates external marketplaces such as Amazon and Flipkart. Provides sales and refund data in JSON format through a REST API. The API data is generated and served using **AWS Lambda**.
-
-*Benefit:* This reflects a real-world integration pattern commonly used in Data Engineering projects and is more credible during technical interviews.
-
-### B. AWS Glue (PySpark) Data Processing
-Data transformation is performed using **AWS Glue Jobs written in PySpark**. Key responsibilities include:
-- Data cleansing
-- Schema validation
-- Deduplication
-- Data standardization
-- Multi-source data integration
-
-AWS Glue provides a managed Apache Spark environment, while PySpark is used to implement the transformation logic.
-
-*Benefit:* Demonstrates knowledge of both AWS Glue as a managed ETL service and PySpark as the underlying distributed processing framework.
-
-### C. Data Quality and Quarantine Handling
-The architecture includes a dedicated quarantine layer for invalid records. Valid records proceed through the pipeline, while invalid or malformed records are routed and stored in the quarantine zone:
-`s3://e-commerce-multi-channel/bad-records/`
-
-Examples of quarantined records:
-- Missing mandatory fields
-- Invalid data types
-- Corrupted JSON payloads
-- Schema mismatches
-
-*Benefit:* Prevents downstream pipeline failures and follows production-grade data quality practices.
-
-### D. Star Schema Data Warehouse Design
-Instead of loading all information into a single denormalized table, the warehouse follows a dimensional modeling approach.
-
-#### Fact Table: `fact_sales`
-Contains:
-- Quantity sold
-- Sales amount
-- Refund amount
-- Transaction date
-- Product key
-- Customer key
-- Channel key
-
-#### Dimension Tables:
-- `dim_products`: Product ID, Product Name, Category, Price
-- `dim_customers`: Customer ID, Customer Details (First Name, Last Name, Email, Phone)
-- `dim_channels`: Sales Channel, Website, Marketplace
-
-*Benefit:* Improves analytical performance and demonstrates strong data warehousing knowledge.
-
-### E. Local Development Environment
-The project uses **Docker Compose** to run services locally.
-Components:
-- Apache Airflow (Official Airflow Docker Compose configuration, with project-specific volume mounts and dependencies configured).
-- MySQL (Transactional operational database).
-
-*Benefit:* Enables development and testing without maintaining cloud infrastructure continuously.
-
-### F. Serverless API Data Generation (AWS Lambda + Amazon API Gateway)
-The Marketplace API source is exposed using **Amazon API Gateway** and generated/served dynamically using **AWS Lambda**. Since the Marketplace source is an external API and does not require heavy processing, this combination acts as a lightweight serverless component to generate realistic marketplace sales and refund data in JSON format.
-
-*Lambda & API Gateway Responsibilities:*
-- **Amazon API Gateway**: Exposes public HTTPS endpoints (`/sales` and `/refunds`) and routes incoming HTTP requests to our Lambda function.
-- **AWS Lambda**: Programmatically generates mock sales/refund transaction lists on-demand and returns JSON payloads.
-
----
-
-## 3. Architecture Components in Detail
-
-### Data Ingestion Layer
-- **MySQL Extraction**: Python-based ingestion jobs connect to the local database using `pymysql`, extract incremental order and customer data, convert extracted records into local staging files, upload them to `s3://e-commerce-multi-channel/raw-landing/mysql/` and clean up staging files.
-- **Marketplace API Extraction**: The ingestion process calls the public HTTPS endpoints exposed by **Amazon API Gateway**, which triggers the underlying **AWS Lambda** function. It performs basic response validation, generates raw JSON files, uploads them to `s3://e-commerce-multi-channel/raw-landing/marketplace/` and cleans up staging files.
-
-### Data Lake Storage Layer (S3 Bucket: `e-commerce-multi-channel`)
-- **Raw Landing Zone (`raw-landing/`)**: Stores original source data, historical snapshots, audit copies, and unmodified source records.
-- **Quarantine Zone (`bad-records/`)**: Stores invalid records and failed validations to allow troubleshooting without impacting downstream processing.
-- **Curated Zone (`curated/`)**: Stores cleansed, deduplicated, and standardized Parquet datasets generated by the AWS Glue job. Sales data is partitioned by year, month, and day for optimized querying.
-
-### Processing Layer (AWS Glue PySpark Job)
-AWS Glue PySpark ETL reads raw data from S3, cleans it, standardizes schema types, resolves sales and refund associations, routes invalid records to quarantine, and outputs parquet formats to `curated/`. 
-
-*Why Glue instead of Lambda for transformations?*
-- **AWS Lambda**: Generates and serves API data, handling lightweight single API requests.
-- **AWS Glue**: Reads massive raw datasets from S3, performs heavy distributed Spark calculations, joins multiple large tables, and writes optimized Parquet data.
-
----
-
-## 4. Star Schema DW Modeling (Snowflake)
-
-### Fact Table: `fact_sales`
-| Column | Data Type | Description |
-| :--- | :--- | :--- |
-| **sale_id** | VARCHAR(100) | Unique transaction identifier (Primary Key) |
-| **product_key** | INT | Foreign Key reference to `dim_products` |
-| **customer_key** | INT | Foreign Key reference to `dim_customers` |
-| **channel_key** | INT | Foreign Key reference to `dim_channels` |
-| **quantity_sold** | INT | Units sold |
-| **sales_amount** | DECIMAL(10,2) | Revenue generated |
-| **refund_amount** | DECIMAL(10,2) | Refund value |
-| **transaction_date** | TIMESTAMP | Transaction timestamp |
-
-### Dimension Tables
-- **`dim_products`**: `product_key` (Identity PK), `product_id` (natural ID), `product_name`, `category`, `price`, `source_system`.
-- **`dim_customers`**: `customer_key` (Identity PK), `customer_id` (natural ID), `first_name`, `last_name`, `email`, `phone`, `source_system`.
-- **`dim_channels`**: `channel_key` (Identity PK), `channel_name` (Website, Amazon, Flipkart), `channel_type` (Internal, Marketplace).
-
----
-
-## 5. Directory Structure & Files
-
 ```text
-airflow/
-├── dags/
-│   └── ecommerce_pipeline_dag.py  # Orchestrates ingestion, Glue, and Snowflake load
-└── logs/
-src/
-├── ingestion/
-│   ├── mysql_ingest.py            # MySQL database extraction script
-│   └── marketplace_ingest.py      # Marketplace API extraction script
-├── glue/
-│   └── ecommerce_glue_transform.py # Simplified Glue PySpark ETL transform script
-└── database/
-    ├── mysql_schema.sql           # MySQL database schema definition
-    ├── mysql_seed.sql             # Seeding operational records
-    └── snowflake_schema.sql       # Snowflake warehouse star schema definition
-scripts/
-├── apply_snowflake_schema.py      # Deploys Snowflake objects programmatically
-└── create_s3_buckets.py          # Creates the single S3 bucket
+┌────────────────────────┐      ┌────────────────────────┐
+│  MySQL Database        │      │  Marketplace REST API  │
+│  (Operational Orders,  │      │  (AWS Lambda &         │
+│   Customers, Products) │      │   API Gateway)         │
+└───────────┬────────────┘      └───────────┬────────────┘
+            │                               │
+            ▼                               ▼
+    [ mysql_ingest.py ]           [ marketplace_ingest.py ]
+            │                               │
+            └───────────────┬───────────────┘
+                            ▼
+               ┌─────────────────────────┐
+               │     Amazon S3 Bucket    │
+               │   raw-landing/ (CSV/JSON│
+               └────────────┬────────────┘
+                            │
+                            ▼
+               ┌─────────────────────────┐
+               │    Local PySpark ETL    │
+               │ (Distributed Transform, │
+               │  Validation, Quarantine)│
+               └───────┬───────────┬─────┘
+                       │           │
+           Valid data  │           │ Invalid records
+                       ▼           ▼
+        ┌──────────────────┐  ┌──────────────────┐
+        │ Amazon S3 Curated│  │ S3 Quarantine    │
+        │ (Parquet format) │  │ bad-records/     │
+        └──────────────┬───┘  └──────────────────┘
+                       │
+                       ▼
+            [ load_snowflake.py ]
+                       │
+                       ▼
+        ┌───────────────────────────────┐
+        │      Snowflake Warehouse      │
+        │ (Star Schema: Fact & Dims)    │
+        └───────────────────────────────┘
+                       ▲
+                       │
+        ┌───────────────────────────────┐
+        │        Apache Airflow         │
+        │   (TaskFlow Orchestration)    │
+        └───────────────────────────────┘
 ```
 
 ---
 
-## 6. Execution Instructions
+## 2. Core Technical Highlights
 
-### A. Start Local Containers
+### A. Local PySpark Distributed Processing
+* **Engine**: Apache Spark (`pyspark`) running locally inside the pipeline infrastructure with dedicated Java (OpenJDK 17) runtime.
+* **Resilient S3 I/O**: Interacts with Amazon S3 via `boto3` to pull raw batches, executes distributed Spark DataFrame transformations locally in memory, and writes partitioned columnar **Parquet** datasets back to the S3 curated layer.
+* **Unified Transformations**:
+  * Unifies disparate schemas across multiple sales channels (`Website`, `Amazon`, `Flipkart`).
+  * Normalizes timestamps, handles schema inference, type casting, and null coalescing.
+  * Employs multi-column deduplication across order identifiers.
+* **Cloud Portability**: The local PySpark transformation logic mirrors enterprise AWS Glue / Amazon EMR jobs line-for-line, enabling zero-code-change cloud deployment if needed.
+
+### B. Automated Quarantine & Data Quality
+* Records failing data validation checks are automatically segregated into the quarantine directory (`bad-records/`):
+  * Missing foreign keys (`customer_id`, `product_id`)
+  * Non-positive sales quantities (`quantity <= 0`)
+  * Malformed payloads or null identifiers
+* Prevents data corruption downstream in the warehouse while preserving bad records for debugging.
+
+### C. Dimensional Warehouse Modeling (Snowflake)
+* **Fact Table (`fact_sales`)**: Stores granular sales transactions, units sold, gross revenue, refund amounts, and foreign keys referencing dimensions.
+* **Dimension Tables**:
+  * `dim_products`: SCD Type 1 product catalog tracking categories and unit prices across source systems.
+  * `dim_customers`: Customer profiles and contact details.
+  * `dim_channels`: Sales channel breakdown (`Website`, `Amazon`, `Flipkart`).
+* **Idempotent Loading**: Staging tables deduplicated using `QUALIFY ROW_NUMBER()` and merged with `MERGE INTO` statements to ensure zero duplication during backfills.
+
+### D. End-to-End Orchestration (Apache Airflow)
+* Modern **Airflow TaskFlow API** (`@dag`, `@task.bash`) pipeline orchestrating each stage linearly with dependency checks:
+  1. `start_pipeline`
+  2. `extract_mysql_data` & `extract_marketplace_data` (Parallel execution)
+  3. `local_pyspark_etl_transform` (PySpark distributed processing)
+  4. `load_snowflake_star_schema` (Warehouse loading & merge)
+  5. `end_pipeline`
+
+---
+
+## 3. Project Structure
+
+```text
+├── airflow/
+│   ├── dags/
+│   │   └── ecommerce_pipeline_dag.py     # Airflow DAG (TaskFlow API)
+│   └── logs/                             # Airflow task execution logs
+├── scripts/
+│   ├── local_pyspark_transform.py        # PySpark distributed ETL script
+│   ├── load_snowflake.py                 # Snowflake dimensional warehouse loader
+│   ├── apply_snowflake_schema.py         # Snowflake DDL automation script
+│   └── create_s3_buckets.py              # AWS S3 bucket provisioning
+├── src/
+│   ├── database/
+│   │   ├── mysql_schema.sql              # MySQL operational database DDL
+│   │   ├── mysql_seed.sql                # Initial transactional seed data
+│   │   └── snowflake_schema.sql          # Snowflake dimensional star schema DDL
+│   ├── glue/
+│   │   └── ecommerce_glue_transform.py   # Cloud Glue/EMR script counterpart
+│   └── ingestion/
+│       ├── mysql_ingest.py               # Operational DB incremental extractor
+│       └── marketplace_ingest.py         # Marketplace REST API extractor (NDJSON)
+├── Dockerfile                            # Custom Airflow image with Java 17 & PySpark
+├── docker-compose.yml                    # Airflow, Redis, PostgreSQL, MySQL services
+├── screenshots/                          # Pipeline execution & verification screenshots
+├── .env.example                          # Environment template
+└── pyproject.toml                        # Python dependencies
+```
+
+---
+
+## 4. Setup & Execution Guide
+
+### Prerequisites
+* Docker & Docker Compose
+* Python 3.11+ (or `uv`)
+* AWS Account (S3 access)
+* Snowflake Account
+
+### Step 1: Clone Repository & Configure Environment
 ```bash
+cp .env.example .env
+```
+Fill in your credentials in `.env`:
+* **AWS**: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION`, `S3_BUCKET`
+* **Snowflake**: `SNOWFLAKE_USER`, `SNOWFLAKE_PASSWORD`, `SNOWFLAKE_ACCOUNT`, etc.
+* **MySQL**: `MYSQL_HOST=localhost`, `MYSQL_PORT=3307`, `MYSQL_USER=ecommerce_user`, etc.
+
+### Step 2: Build & Start Containerized Services
+Build the custom Airflow image (pre-configured with OpenJDK 17 and PySpark) and launch the stack:
+```bash
+docker compose build
 docker compose up -d
 ```
 
-### B. Seed MySQL Database
+Verify all containers are healthy:
 ```bash
-Get-Content src/database/mysql_schema.sql | docker exec -i ecommerce-mysql-source mysql -uecommerce_user -pecommerce_password
-Get-Content src/database/mysql_seed.sql | docker exec -i ecommerce-mysql-source mysql -uecommerce_user -pecommerce_password
+docker compose ps
 ```
 
-### C. Setup Snowflake and AWS S3
-1. Log in to Snowflake and run `apply_snowflake_schema.py` after entering credentials in `.env`:
+### Step 3: Initialize Database & Cloud Resources
+1. **Seed Operational MySQL Database**:
    ```bash
-   uv run scripts/apply_snowflake_schema.py
+   # Windows PowerShell
+   Get-Content src/database/mysql_schema.sql | docker exec -i ecommerce-mysql-source mysql -uecommerce_user -pecommerce_password
+   Get-Content src/database/mysql_seed.sql | docker exec -i ecommerce-mysql-source mysql -uecommerce_user -pecommerce_password
    ```
-2. Log in to AWS Console, create IAM access keys, save them in `.env`, and run:
+
+2. **Provision AWS S3 Bucket & Partitions**:
    ```bash
    uv run scripts/create_s3_buckets.py
    ```
 
-### D. Run Pipeline
-Access Apache Airflow UI at `http://localhost:8080` and trigger the `ecommerce_multi_channel_pipeline` DAG manually or on a schedule to load data end-to-end.
+3. **Deploy Snowflake Star Schema**:
+   ```bash
+   uv run scripts/apply_snowflake_schema.py
+   ```
+
+---
+
+## 5. Running the Pipeline
+
+### Option A: Via Apache Airflow (Recommended)
+1. Open the Airflow Web UI at `http://localhost:8080` (Credentials: `admin` / `admin`).
+2. Locate the DAG: **`ecommerce_multi_channel_pipeline`**.
+3. Trigger the DAG with a specific logical date (e.g., `2026-08-19`) or run on schedule.
+4. Monitor live task logs in Graph and Grid views.
+
+### Option B: Standalone CLI Execution
+You can also execute each stage directly for development and testing:
+```bash
+# 1. Ingest Raw Data to S3
+uv run src/ingestion/mysql_ingest.py --date 2026-08-19
+uv run src/ingestion/marketplace_ingest.py --date 2026-08-19
+
+# 2. Run Local PySpark ETL (Data Cleansing & S3 Parquet Output)
+uv run scripts/local_pyspark_transform.py --date 2026-08-19
+
+# 3. Load Curated Datasets into Snowflake Star Schema
+uv run scripts/load_snowflake.py --date 2026-08-19
+```
+
+---
+
+## 6. Snowflake Star Schema Specification
+
+### Fact Table: `fact_sales`
+| Column | Data Type | Key Type | Description |
+|:---|:---|:---|:---|
+| `sale_id` | VARCHAR(100) | PK | Unique unified transaction ID |
+| `product_key` | INT | FK | References `dim_products.product_key` |
+| `customer_key` | INT | FK | References `dim_customers.customer_key` |
+| `channel_key` | INT | FK | References `dim_channels.channel_key` |
+| `quantity_sold` | INT | Metric | Number of items purchased |
+| `sales_amount` | DECIMAL(10,2) | Metric | Total transaction amount |
+| `refund_amount` | DECIMAL(10,2) | Metric | Amount refunded (if applicable) |
+| `transaction_date` | TIMESTAMP | Dimension | Event timestamp |
+
+### Dimension Tables
+* **`dim_products`**: `product_key` (Surrogate PK), `product_id` (Natural ID), `product_name`, `category`, `price`, `source_system`.
+* **`dim_customers`**: `customer_key` (Surrogate PK), `customer_id` (Natural ID), `first_name`, `last_name`, `email`, `phone`, `source_system`.
+* **`dim_channels`**: `channel_key` (Surrogate PK), `channel_name` (`Website`, `Amazon`, `Flipkart`), `channel_type`.
+
+---
+
+## 7. Business Intelligence & Analytics Queries
+
+With the data modeled into Snowflake, analytics queries can be executed directly:
+
+```sql
+-- Multi-Channel Revenue Comparison
+SELECT 
+    c.channel_name,
+    COUNT(f.sale_id) AS total_orders,
+    SUM(f.quantity_sold) AS total_units_sold,
+    SUM(f.sales_amount) AS gross_revenue,
+    SUM(f.refund_amount) AS total_refunds,
+    SUM(f.sales_amount - f.refund_amount) AS net_revenue
+FROM fact_sales f
+JOIN dim_channels c ON f.channel_key = c.channel_key
+GROUP BY c.channel_name
+ORDER BY net_revenue DESC;
+```
+
+---
+
+## 8. Pipeline Execution & Verification Gallery
+
+### A. Apache Airflow End-to-End Orchestration (All Tasks Succeeded)
+![Airflow DAG Execution](screenshots/03_airflow_dag_success_run.png)
+
+### B. Local PySpark ETL Task Execution Log inside Airflow
+![PySpark Task Log](screenshots/04_airflow_pyspark_task_logs.png)
+
+### C. Amazon S3 Data Lake Zones (`bad-records/`, `curated/`, `raw-landing/`)
+![Amazon S3 Storage Buckets](screenshots/07_aws_s3_bucket_zones.png)
+
+### D. Automated Quarantine Zone (`bad-records/` JSON Audit Trail)
+![S3 Quarantine Bad Records](screenshots/09_aws_s3_quarantine_bad_records.png)
+
+### E. Amazon S3 Hive-Style Parquet Partitioning (`curated/sales/`)
+![S3 Curated Parquet Partitioning](screenshots/08_aws_s3_curated_parquet_partitions.png)
+
+### F. Serverless Source Integration (AWS Lambda + Amazon API Gateway)
+![AWS Lambda API Gateway Trigger](screenshots/10_aws_lambda_api_gateway_trigger.png)
+
+### G. Snowflake Star Schema & Multi-Channel Revenue Analytics
+![Snowflake Analytics Query Result](screenshots/12_snowflake_analytics_query_result.png)
+
