@@ -90,10 +90,15 @@ def upload_to_s3(local_file, bucket, s3_key):
         return False
 
 def save_json_file(data, file_path):
+    """Save data as newline-delimited JSON (NDJSON) — one object per line.
+    This is the format required by Spark's spark.read.json().
+    """
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    records = data if isinstance(data, list) else [data]
     with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
-    print(f"Saved data to {file_path}")
+        for record in records:
+            f.write(json.dumps(record) + "\n")
+    print(f"Saved {len(records)} record(s) to {file_path}")
 
 def main():
     parser = argparse.ArgumentParser(description="Ingest marketplace transactions from Lambda API to S3 Raw Landing")

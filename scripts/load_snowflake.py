@@ -81,13 +81,18 @@ def run_load_pipeline(target_date_str):
                 SELECT $1:product_id::int, $1:product_name::string, $1:category::string, $1:price::decimal(10,2), $1:source_system::string
                 FROM {products_stage_path}
             )
-            FILE_FORMAT = (TYPE = parquet);
+            FILE_FORMAT = (TYPE = parquet)
+            PATTERN = '.*\\.parquet';
         """)
         
-        # Merge products into dim_products
+        # Merge products into dim_products (deduplicated via QUALIFY to prevent Snowflake DML duplicate error)
         cursor.execute("""
             MERGE INTO dim_products t
-            USING temp_products_staging s
+            USING (
+                SELECT product_id, product_name, category, price, source_system
+                FROM temp_products_staging
+                QUALIFY ROW_NUMBER() OVER (PARTITION BY product_id, source_system ORDER BY product_name) = 1
+            ) s
             ON t.product_id = s.product_id AND t.source_system = s.source_system
             WHEN MATCHED THEN
                 UPDATE SET t.product_name = s.product_name, t.category = s.category, t.price = s.price
@@ -120,13 +125,18 @@ def run_load_pipeline(target_date_str):
                 SELECT $1:customer_id::int, $1:first_name::string, $1:last_name::string, $1:email::string, $1:phone::string, $1:source_system::string
                 FROM {customers_stage_path}
             )
-            FILE_FORMAT = (TYPE = parquet);
+            FILE_FORMAT = (TYPE = parquet)
+            PATTERN = '.*\\.parquet';
         """)
         
-        # Merge customers into dim_customers
+        # Merge customers into dim_customers (deduplicated via QUALIFY to prevent Snowflake DML duplicate error)
         cursor.execute("""
             MERGE INTO dim_customers t
-            USING temp_customers_staging s
+            USING (
+                SELECT customer_id, first_name, last_name, email, phone, source_system
+                FROM temp_customers_staging
+                QUALIFY ROW_NUMBER() OVER (PARTITION BY customer_id, source_system ORDER BY first_name) = 1
+            ) s
             ON t.customer_id = s.customer_id AND t.source_system = s.source_system
             WHEN MATCHED THEN
                 UPDATE SET t.first_name = s.first_name, t.last_name = s.last_name, t.email = s.email, t.phone = s.phone
@@ -171,7 +181,8 @@ def run_load_pipeline(target_date_str):
                     $1:transaction_date::timestamp
                 FROM {sales_stage_path}
             )
-            FILE_FORMAT = (TYPE = parquet);
+            FILE_FORMAT = (TYPE = parquet)
+            PATTERN = '.*\\.parquet';
         """)
 
         # Clean existing fact records for the target date to ensure idempotency

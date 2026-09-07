@@ -37,6 +37,7 @@ INSERT INTO orders (order_id, customer_id, product_id, quantity, total_amount, o
 (1002, 2, 3, 2, 500.00, 'Completed', '2026-08-19 11:45:00'),
 (1003, 3, 4, 1, 150.00, 'Completed', '2026-08-19 14:30:00'),
 (1004, 4, 2, 1, 800.00, 'Refunded', '2026-08-19 16:00:00'), -- Refunded order
+(1099, 7, 3, 1, 250.00, 'Cancelled', '2026-08-19 17:30:00'), -- Cancelled order (Routes to Quarantine)
 -- Day 2: 2026-08-20
 (1005, 5, 5, 2, 700.00, 'Completed', '2026-08-20 09:30:00'),
 (1006, 6, 1, 1, 1200.00, 'Completed', '2026-08-20 12:15:00'),
